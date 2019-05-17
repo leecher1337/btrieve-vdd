@@ -28,6 +28,7 @@ static Bitu INT7B_Handler(void)
     BTI_SINT stat = B_NO_ERROR;
     BTI_CHAR ckeynum;
     BTI_BYTE keyLength;
+    bool bTransKeybuf = false;
 
     xdataPtr = SegPhys(ds) + reg_dx;
     Mem_CopyFrom(xdataPtr, &xdata, sizeof(xdata));
@@ -72,6 +73,9 @@ static Bitu INT7B_Handler(void)
         op_flags &= ~OP_READ_BUFLEN;
     if (xdata.KEY_BUFFER)
     {
+        char fullname[DOS_PATHLENGTH];
+        Bit8u drive;
+
         if (xdata.FUNCTION != B_OPEN && xdata.FUNCTION != B_CREATE &&
             xdata.FUNCTION != 50 + B_CREATE)
         {
@@ -80,11 +84,22 @@ static Bitu INT7B_Handler(void)
                 Mem_CopyFrom(dWord2Ptr((RealPt)xdata.KEY_BUFFER), keyBuffer, keyLength);
                 memcpy(keyBufferLocal, keyBuffer, keyLength);
             }
+            bTransKeybuf = xdata.FUNCTION == B_SET_DIR;
         }
         else
         {
             BTI_BYTE len = (keyLength == MAX_KEY_SIZE || !keyLength) ? MAX_KEY_SIZE : keyLength + 1;
+
             Mem_CopyFrom(dWord2Ptr((RealPt)xdata.KEY_BUFFER), keyBuffer, len);
+            bTransKeybuf = true;
+        }
+
+        if (bTransKeybuf)
+        {
+            // Map DOS-directory to physical directory
+            DOS_MakeName((const char*)keyBuffer, fullname, &drive);
+            keyLength = snprintf((char*)keyBuffer, sizeof(keyBuffer), "%s%s", Drives[drive]->GetWinDir(), fullname);
+            memcpy(keyBufferLocal, keyBuffer, keyLength);
         }
     }
     if (op_flags & OP_RETN_INVALID)
@@ -118,6 +133,19 @@ static Bitu INT7B_Handler(void)
     {
         register BTI_BYTE i;
 
+        if (bTransKeybuf && memcmp(keyBufferLocal, keyBuffer, keyLength))
+        {
+            int len;
+
+            for (i = 0; i < DOS_DRIVES; i++)
+                if (Drives[i] && !strnicmp(Drives[i]->GetWinDir(), (char*)keyBuffer, (len = strlen(Drives[i]->GetWinDir()))))
+                {
+                    keyBuffer[0] = 'A' + i;
+                    keyBuffer[1] = ':';
+                    memmove(&keyBuffer[2], &keyBuffer[len - 1], strlen((char*)&keyBuffer[len]));
+                    break;
+                }
+        }
         for (i = 0; i < keyLength; i++)
             if (keyBufferLocal[i] != keyBuffer[i])
                 Mem_Stosb(dWord2Ptr((RealPt)xdata.KEY_BUFFER + i), keyBuffer[i]);

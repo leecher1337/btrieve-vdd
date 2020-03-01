@@ -123,8 +123,8 @@ BTI_WORD BtrQueryOps(BTI_WORD op);
 BTI_WORD CopyBackParams(BTI_WORD opFlag, XDATA *pXdata, BTI_WORD btrRet, BTI_BUFFER_PTR posBlockPtr);
 BTI_VOID_PTR BtrGetDataBuffer(BTI_WORD BUF_LEN);
 void BtrFreeDataBuffer(BTI_VOID_PTR dataBufferLocal);
-BTI_BOOL BTRInitialize();
-void BTRUnload();
+BTI_BOOL BTRInitialize(void);
+void BTRUnload(void);
 
 #ifdef __cplusplus
 }

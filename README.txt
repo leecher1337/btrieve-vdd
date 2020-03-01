@@ -8,11 +8,9 @@ This is a virtual device driver to connect INT 7B BTRIEVE service functions
 to any of the following DOS Virtual machines:
 
  * NTVDM  (Not needed, you get the driver from Pervasive)
- * DOXBOX
+ * DOXBOX (Currently only tested on Windows Dosbox builds)
  * VDOS
-
-Currently it is only for Windows builds, but adapting it to other environments
-that support BTRIEVE shouldn't be too hard.
+ * DOSEMU
 
 Motivation
 ----------
@@ -29,7 +27,7 @@ support, the VDD by Pervasive was only supplied for the classic NTVDM
 Thus, to get proper evaluation results, BTRIEVE support had to be implemented.
 
 If you want to know which emulator won: vDOS was the clear winner performance-
-wise.
+wise on Windows.
 
 File structure
 --------------
@@ -40,14 +38,41 @@ Common modules
 	BTRFNC.C	- Common functions (platform independent)
 	Platform dependent implementation of common modules (select ONE!)
 		BTRFNC_WIN32.C	- Windows implementation of platform specific initializers
-		BTRFNC_LINUX.C	- Just a stub for Linux, please implement it, if needed!
+		BTRFNC_LINUX.C	- Linux implementation of platform specific initializers
 Emulator specific modules (entry points for emulator, select ONE!)
 	MOD_NTVDM.C	- VDD for NTVDM
 	MOD_DOSBOX.CPP	- Device driver for DOSBOX
 	MOD_VDOS.CPP	- Device driver for VDOS
+	MOD_DOSEMU.C	- VDD for DOSEMU
+
+DEV/	DOS device drivers required for specific emulator
+	DOSEMU
+		BTRDRVR.ASM	- Source of DOS driver for DOSEMU
+		BTRDRVR.SYS	- Compiled  DOS driver for DOSEMU
+	NTVDM
+		Just use BTRDRVR from Pervasive
+
+CONFIG/	Configuration files for DOSEMU plugin 
 
 Compiling
----------
+=========
+DOSEMU:
+In Dosemu, this works as a plugin:
+ * Create directory src/plugin/btrieve-vdd and copy the contents of this
+   directory to it
+ * Edit src/dosext/mfs/lfn.c and remove static keyword from function 
+   build_posix_path so that it reads:
+   int build_posix_path(char *dest, const char *src, int allowwildcards)
+ * ./default-configure
+ * make
+ * Copy DEV/dosemu/btrdrvr.sys to your Dosemu DOS directory
+   ~/.dosemu/drives/d/dosemu/
+ * Load the driver on startup by adding the following line to your
+   Dosemu config.sys  (~/.dosemu/drives/c/config.sys):
+
+   devicehigh=d:\dosemu\btrdrvr.sys
+
+Other emulators:
 In your makefile:
  * Add BTRFNC.C
  * Depending on platform (WIN32, LINUX, ...), add platform dependent 

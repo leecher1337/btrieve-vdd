@@ -1,0 +1,3 @@
+	/* demo plugin */
+btrvdd			RETURN(BTRVDD);
+

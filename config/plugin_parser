@@ -1,0 +1,16 @@
+/* Merged parser stuff for demo plugin
+ */
+
+%{
+extern int btrvdd_transpath;
+%}
+
+%token BTRVDD
+
+%%
+
+line:
+		BTRVDD bool	{btrvdd_transpath = ($2!=0);}
+
+%%
+

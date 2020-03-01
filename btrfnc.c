@@ -127,7 +127,7 @@ BTI_WORD CopyBackParams(BTI_WORD opFlag, XDATA *pXdata, BTI_WORD btrRet, BTI_BUF
 
     op = pXdata->FUNCTION % 100;
     /*  Add 50 (32h) to any "get" operation to just return the key data.  */
-    if (op >= 50+B_GET_EQUAL && op != 50+B_STAT || op == 50+B_INSERT)
+    if ((op >= 50+B_GET_EQUAL && op != 50+B_STAT) || op == 50+B_INSERT)
         op -= 50;
 
     switch (btrRet)
@@ -154,8 +154,8 @@ BTI_WORD CopyBackParams(BTI_WORD opFlag, XDATA *pXdata, BTI_WORD btrRet, BTI_BUF
     }
     if (op == B_EXT_INSERT) bRetParams = TRUE;
     if ((op == B_INSERT || op == B_UPDATE || op == B_EXT_INSERT) &&
-        (btrRet == B_DATA_MESSAGE_TOO_SMALL || btrRet == B_DATALENGTH_ERROR &&
-            pXdata->BUF_LEN < *(BTI_WORD*)posBlockPtr))
+        (btrRet == B_DATA_MESSAGE_TOO_SMALL || (btrRet == B_DATALENGTH_ERROR &&
+            pXdata->BUF_LEN < *(BTI_WORD*)posBlockPtr)))
         bRetParams = FALSE;
     if (!bRetParams) opFlag = ~OP_RETN_MASK;
 

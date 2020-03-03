@@ -1,3 +1,4 @@
 	/* demo plugin */
-btrvdd			RETURN(BTRVDD);
+btrv_maplocalpath			RETURN(BTRV_MAPLOCALPATH);
+btrv_mappath				RETURN(BTRV_MAPPATH);
 

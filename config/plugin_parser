@@ -2,15 +2,16 @@
  */
 
 %{
-extern int btrvdd_transpath;
+extern int btrv_maplocalpath;
+extern int btrv_mappath(char *src, char *dst);
 %}
 
-%token BTRVDD
+%token BTRV_MAPPATH BTRV_MAPLOCALPATH
 
 %%
 
 line:
-		BTRVDD bool	{btrvdd_transpath = ($2!=0);}
-
+		BTRV_MAPLOCALPATH bool { btrv_maplocalpath = ($2!=0); }
+		| BTRV_MAPPATH '(' string_expr ',' string_expr ')' { btrv_mappath($3, $5); }
 %%
 

@@ -14,7 +14,7 @@ HFILES = btrfnc.h
 SYS    = $(D)/btrdrvr.sys
 DEPENDS= $(CFILES:.c=.d)
 OBJS   = $(CFILES:.c=.o)
-CPPFLAGS += -DBTI_HPUX=1 -DTRANSL_PATH
+CPPFLAGS += -DBTI_HPUX=1
 
 ALL = $(CFILES) $(HFILES)
 

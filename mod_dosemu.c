@@ -24,9 +24,35 @@
  * You can turn this setting on via desemu config value:
  * btrvdd_transpath=1
  */
-int btrvdd_transpath = 0;
+int btrv_maplocalpath = 0;
+struct {
+    char *src;
+    char *dst;
+    unsigned char len_src;
+    unsigned char len_dst;
+} btrv_pathmap[32];
+static int m_pathmaps = 0;
 
-extern int build_posix_path(char *dest, const char *src, int allowwildcards); //lfs.c
+// lfn.c
+extern int build_posix_path(char *dest, const char *src, int allowwildcards);
+extern int truename(char *dest, const char *src, int allowwildcards);
+
+int btrv_mappath(char *src, char *dst);
+
+static int replace(char *subj, int size_subj, unsigned char *plen_subj, char *src, int len_src, char *dst, int len_dst)
+{
+    if (strncasecmp(src, subj, len_src) == 0)
+    {
+        int len = *plen_subj - len_src;
+
+        if (len_dst + len >= size_subj) len = size_subj -len_dst;
+        memmove(subj+len_dst, subj+len_src, len);
+        memcpy(subj, dst, len_dst);
+        *plen_subj = len + len_dst;
+        return *plen_subj;
+    }
+    return 0;
+}
 
 int BTRIEVE_int7b(void)
 {
@@ -103,35 +129,52 @@ int BTRIEVE_int7b(void)
     if (xdataPtr->KEY_BUFFER)
     {
         char fullname[PATH_MAX];
+        int ukb = 0;
 
         if (xdataPtr->FUNCTION != B_OPEN && xdataPtr->FUNCTION != B_CREATE &&
             xdataPtr->FUNCTION != 50 + B_CREATE)
         {
-            if ((op_flags & (OP_RETN_KEYBUFFER | OP_READ_KEYBUFFER)))
+            if ((ukb = (op_flags & (OP_RETN_KEYBUFFER | OP_READ_KEYBUFFER))))
             {
                 keyBufferPtr = rFAR_PTR(BTI_VOID_PTR,(Bit32u)xdataPtr->KEY_BUFFER);
                 memcpy(keyBuffer, keyBufferPtr, keyLength);
-                memcpy(keyBufferLocal, keyBuffer, keyLength);
             }
-            bTransKeybuf = btrvdd_transpath && xdataPtr->FUNCTION == B_SET_DIR;
+            bTransKeybuf = xdataPtr->FUNCTION == B_SET_DIR;
         }
         else
         {
             BTI_BYTE len = (keyLength == MAX_KEY_SIZE || !keyLength) ? MAX_KEY_SIZE : keyLength + 1;
             keyBufferPtr = rFAR_PTR(BTI_VOID_PTR,(Bit32u)xdataPtr->KEY_BUFFER);
             memcpy(keyBuffer, keyBufferPtr, len);
-            bTransKeybuf = btrvdd_transpath;
+            bTransKeybuf = TRUE;
         }
 
-#ifdef TRANSL_PATH
         if (bTransKeybuf)
         {
-           // Map DOS-directory to physical directory
-            build_posix_path(fullname, (const char *)keyBuffer, 0);
-            keyLength = snprintf((char*)keyBuffer, sizeof(keyBuffer), "%s", fullname)+1;
-            memcpy(keyBufferLocal, keyBuffer, keyLength);
+            int i;
+
+            if (btrv_maplocalpath) i=build_posix_path(fullname, (const char *)keyBuffer, 0);
+            else i=truename(fullname, (char*)keyBuffer, 0);
+
+            if (i>=0)
+            {
+                keyLength = snprintf((char*)keyBuffer, sizeof(keyBuffer), "%s", fullname)+1;
+                ukb++;
+            }
+
+            for (i=0; i<m_pathmaps; i++)
+            {
+                if (replace((char*)keyBuffer, sizeof(keyBuffer), &keyLength, 
+                             btrv_pathmap[i].src, btrv_pathmap[i].len_src, 
+                             btrv_pathmap[i].dst, btrv_pathmap[i].len_dst))
+                {
+                    ukb++;
+                    break;
+                }
+            }
         }
-#endif
+        if (ukb) memcpy(keyBufferLocal, keyBuffer, keyLength);
+
     }
     statusPtr = rFAR_PTR(BTI_SINT_PTR,(Bit32u)xdataPtr->STATUS);
     if (op_flags & OP_RETN_INVALID)
@@ -165,18 +208,26 @@ int BTRIEVE_int7b(void)
     {
         register BTI_BYTE i;
 
-#ifdef TRANSL_PATH
         if (bTransKeybuf && memcmp(keyBufferLocal, keyBuffer, keyLength))
         {
-            char fullname[PATH_MAX];
-            int drive;
+            if (btrv_maplocalpath)
+            {
+                char fullname[PATH_MAX];
+                int drive;
 
-            drive = find_drive((char*)keyBuffer);
-            if (drive<0) drive=-drive;
-            make_unmake_dos_mangled_path(fullname, (char*)keyBuffer, drive, 0);
-            strcpy(keyBuffer, fullname);
+                drive = find_drive((char*)keyBuffer);
+                if (drive<0) drive=-drive;
+                make_unmake_dos_mangled_path(fullname, (char*)keyBuffer, drive, 0);
+                strcpy(keyBuffer, fullname);
+            }
+            for (i=0; i<m_pathmaps; i++)
+            {
+                if (replace((char*)keyBuffer, sizeof(keyBuffer), &keyLength, 
+                             btrv_pathmap[i].dst, btrv_pathmap[i].len_dst, 
+                             btrv_pathmap[i].src, btrv_pathmap[i].len_src))
+                    break;
+            }
         }
-#endif
         for (i=0; i<keyLength; i++)
             if (keyBufferLocal[i] != keyBuffer[i])
                 keyBufferPtr[i] = keyBuffer[i];
@@ -198,3 +249,29 @@ int BTRIEVE_int7b(void)
     return 1;
 }
 
+int btrv_mappath(char *src, char *dst)
+{
+    int l;
+
+    if (m_pathmaps>=sizeof(btrv_pathmap)/sizeof(btrv_pathmap[0]))
+    {
+        warn("BTRIEVE: Too many path mappings, increase limit in od_dosemu.c.\n");
+        return -1;
+    }
+    btrv_pathmap[m_pathmaps].src = src;
+    if ((l=strlen(src))>=MAX_KEY_SIZE)
+    {
+        warn("BTRIEVE: Mapped source string %s too long, ignored.\n", src);
+        return -1;
+    }
+    btrv_pathmap[m_pathmaps].len_src = l;
+    btrv_pathmap[m_pathmaps].dst = dst;
+    if ((l=strlen(dst))>=MAX_KEY_SIZE)
+    {
+        warn("BTRIEVE: Mapped destination string %s too long, ignored.\n", dst);
+        return -1;
+    }
+    btrv_pathmap[m_pathmaps].len_dst = l;
+    m_pathmaps++;
+    return 0;
+}

@@ -65,7 +65,12 @@ DOSEMU:
 In Dosemu, this works as a plugin:
  * Create directory src/plugin/btrieve-vdd and copy the contents of this
    directory to it
- * Edit src/dosext/mfs/lfn.c and:
+ * The following step can be done automatically with:
+
+     sed -i 's/static int build_posix_path/int build_posix_path/g; s/static int truename/int truename/g' src/dosext/mfs/lfn.c
+
+   or manually:
+   Edit src/dosext/mfs/lfn.c and:
    * Remove static keyword from function build_posix_path
      so that it reads:
 

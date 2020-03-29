@@ -12,6 +12,7 @@ to any of the following DOS Virtual machines:
  * DOXBOX (Currently only tested on Windows Dosbox builds)
  * VDOS
  * DOSEMU
+ * DOSEMU2
 
 ===============================================================================
 Motivation
@@ -30,6 +31,9 @@ Thus, to get proper evaluation results, BTRIEVE support had to be implemented.
 
 If you want to know which emulator won: vDOS was the clear winner performance-
 wise on Windows.
+Overall, the best performance can be accomplished with DOSEMU on Linux in V86
+mode. For a guide on how to setup it, refer to:
+https://github.com/leecher1337/ntvdmx64/issues/49
 
 ===============================================================================
 File structure
@@ -107,6 +111,99 @@ In Dosemu, this works as a plugin:
    \\server\data\MYTBL.DAT
 
 
+DOSEMU2
+-------
+Dosemu2 unfortunately lacks the convenient plugin interface from DOSEMU. 
+Therefore this is more complicated:
+
+ * Create directory src/plugin/btrieve-vdd and copy the contents of this
+   directory to it
+ * Edit Makefile of this plugin and change:
+
+    mod_dosemu.c       to   mod_dosemu2.c
+    dev/dosemu/%.sys   to   dev/dosemu2/%.sys
+
+ * Edit src/dosext/mfs/lfn.c and:
+   * Remove static keyword from function truename so that it reads:
+
+       int truename(char *dest, const char *src, int allowwildcards)
+
+   Note that using it this way is not recommended by dosemu2 maintainers, but
+   works at the time of writing. If you want to get the plugin approved as part
+   of dosemu2, see dosemu2.c and implement the commented function stubs in 
+   there.
+
+ * Due to lacking plugin support, you have to add start and exit functions.
+   * In src/emu.c in "int main" add:
+
+     BTRInitialize();
+
+   after timer_interrupt(); call.
+
+   * In src/emu.c in "void __leavedos" add:
+
+     BTRUnload();
+
+   before keyb_close();
+
+   * In src/include/doshelpers.h add:
+
+     #define DOS_HELPER_BTRIEVE          0x7B
+
+   * In src/base/async/int.c in function "int dos_helper" add the following
+     lines to the end of the switch() statement:
+
+      case DOS_HELPER_BTRIEVE:
+        if (!BTRIEVE_int7b()) return 0;
+        break;
+
+ * ./default-configure --enable-plugin=btrieve-vdd
+ * make
+ * Copy DEV/dosemu2/btrdrvr.sys to your Dosemu DOS directory
+   ~/.dosemu/drives/d/dosemu/
+ * Load the driver on startup by adding the following line to your
+   Dosemu config.sys  (~/.dosemu/drives/c/config.sys):
+
+     devicehigh=d:\dosemu\btrdrvr.sys
+
+   In dosemu2, there is no configuration file support available anymore.
+   You need to append the parameters to the commandline of the btrdrvr.sys 
+   driver statement.
+   The following options are available:
+
+   * If you want you DOS path to be translated to a LOCAL unix path, add
+
+       maplocalpath=1 
+
+     to the devicehigh= line above, i.e.:
+
+       devicehigh=d:\dosemu\btrdrvr.sys maplocalpath=1
+
+   * If you want a special translation for DOS paths (i.e. when accessing
+     a BTRIEVE server), you have to write a fiel with mapping inside DOS
+     accessible path, i.e. 
+
+       edit c:\map.txt
+
+    The format of the file is LocalDOSpath=DestinationPath, one entry per
+    line, i.e.:
+
+      C:\data=\\server\data\
+
+     If you open C:\data\MYTBL.DAT, it will be translated to 
+     \\server\data\MYTBL.DAT
+
+    After creating the map file, you have to point the driver to it by
+    adding
+
+      mappathfile=[Dos path to file]
+
+    i.e.:
+
+      devicehigh=d:\dosemu\btrdrvr.sys mappathfile=c:\map.txt
+
+
+
 All other emulators:
 --------------------
 In your makefile:
@@ -134,6 +231,7 @@ in gui\sdlmain.cpp in function main, add
 somewhere after AUTOEXEC_Init();
 
 VDOS:
+-----
 In vdos.cpp in function vDos_Init(), add
 	BTRIEVE_Init();
 right before SHELL_Init();

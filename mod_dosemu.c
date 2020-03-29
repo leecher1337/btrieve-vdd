@@ -33,9 +33,12 @@ struct {
 } btrv_pathmap[32];
 static int m_pathmaps = 0;
 
+// ---- Imported fcuntion calls ----
+#ifndef DOSEMU2
 // lfn.c
 extern int build_posix_path(char *dest, const char *src, int allowwildcards);
 extern int truename(char *dest, const char *src, int allowwildcards);
+#endif
 
 int btrv_mappath(char *src, char *dst);
 
@@ -77,6 +80,9 @@ int BTRIEVE_int7b(void)
     BTI_BYTE keyLength;
     int bTransKeybuf = FALSE;
 
+#ifdef DOSEMU2
+    if (_CX == 1) return parse_cmdline();
+#endif
     if (_CX != 3 || !BTRCALL)
     {
         CARRY;
@@ -215,10 +221,16 @@ int BTRIEVE_int7b(void)
                 char fullname[PATH_MAX];
                 int drive;
 
+#ifdef DOSEMU2
+                char *pkeyBuffer = (char*)keyBuffer;
+                drive = find_drive(&pkeyBuffer);
+                if (pkeyBuffer != (char*)keyBuffer) free(pkeyBuffer);
+#else
                 drive = find_drive((char*)keyBuffer);
+#endif
                 if (drive<0) drive=-drive;
                 make_unmake_dos_mangled_path(fullname, (char*)keyBuffer, drive, 0);
-                strcpy(keyBuffer, fullname);
+                strcpy((char*)keyBuffer, fullname);
             }
             for (i=0; i<m_pathmaps; i++)
             {

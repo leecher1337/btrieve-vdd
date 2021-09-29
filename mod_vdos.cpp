@@ -97,9 +97,11 @@ static Bitu INT7B_Handler(void)
         if (bTransKeybuf)
         {
             // Map DOS-directory to physical directory
-            DOS_MakeName((const char*)keyBuffer, fullname, &drive);
-            keyLength = snprintf((char*)keyBuffer, sizeof(keyBuffer), "%s%s", Drives[drive]->GetWinDir(), fullname);
-            memcpy(keyBufferLocal, keyBuffer, keyLength);
+			if (DOS_MakeName((const char*)keyBuffer, fullname, &drive))
+			{
+				keyLength = snprintf((char*)keyBuffer, sizeof(keyBuffer), "%s%s", Drives[drive]->GetWinDir(), fullname);
+				memcpy(keyBufferLocal, keyBuffer, keyLength);
+			}
         }
     }
     if (op_flags & OP_RETN_INVALID)
